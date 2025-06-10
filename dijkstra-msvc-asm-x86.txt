@@ -1,0 +1,397 @@
+#include <fstream>
+#include <iostream>
+#include <queue>
+std::ifstream fin ("test.in");
+
+int readInt()
+{
+	int x;
+	fin >> x;
+	return x;
+}
+
+void printInt(int x)
+{
+	std::cout << x << ' ';
+}
+
+
+struct ListaNod {
+	int info1, info2;
+	ListaNod *urm;
+};
+
+ListaNod* addInceputLista(ListaNod *lista, int info1, int info2)
+{
+	__asm {
+		push dword ptr 12;
+		call malloc;
+		add esp, 4;
+		// eax e pointer catre nod
+		mov ebx, [ebp+12];
+		mov dword ptr [eax], ebx;
+		mov ebx, [ebp+16];
+		mov dword ptr [eax]+4, ebx;
+		mov dword ptr [eax]+8, 0;
+
+		mov ebx, [ebp+8];
+		mov ecx, [ebx]; // ecx e lista veche
+		test ecx, ecx;
+			jz _iesi_afara;
+		
+		mov dword ptr [eax]+8, ecx;
+		jmp _iesi_afara;
+
+		_iesi_afara:;
+		// returnam eax
+	};
+}
+
+
+struct HeapNod {
+	int info, key;
+};
+
+int heap_n = 0;
+HeapNod heap[2'000'000];
+
+void swapHeapNodes(HeapNod* a, HeapNod *b)
+{
+	__asm {
+		mov eax, [ebp+8];
+		mov ebx, [ebp+12];
+		
+		mov esi, [eax];
+		mov edi, [ebx];
+		mov [eax], edi;
+		mov [ebx], esi;
+
+		mov esi, [eax+4];
+		mov edi, [ebx+4];
+		mov [eax+4], edi;
+		mov [ebx+4], esi;
+	};
+}
+
+void insertHeap(int info, int key)
+{
+	__asm {
+		lea eax, heap;
+		mov ecx, heap_n;
+		inc ecx;
+		mov heap_n, ecx;
+
+		mov esi, [ebp+8];
+		mov edi, [ebp+12];
+		mov [eax+ecx*8], esi;
+		mov [eax+ecx*8+4], edi;
+
+		mov esi, heap_n;
+
+		_heap_loop:
+		cmp esi, 1;
+			je _end_heap_loop;
+		mov edi, esi;
+		shr edi, 1;
+		// edi is esi's father
+		mov ebx, [eax+edi*8+4]; // edi--ebx
+		mov ecx, [eax+esi*8+4]; // esi--ecx
+
+		cmp ebx, ecx;
+			jle _end_heap_loop;
+
+		push esi;
+		push eax;
+		shl edi, 3;
+		add edi, eax;
+		push edi;
+		shl esi, 3;
+		add esi, eax;
+		push esi;
+		call swapHeapNodes;
+		add esp, 8;
+		pop eax;
+		pop esi;
+
+		shr esi, 1;
+		jmp _heap_loop;
+		_end_heap_loop:
+	};
+}
+
+void popHeap()
+{
+	__asm {
+		lea eax, heap;
+		mov esi, heap_n;
+		shl esi, 3;
+		add esi, eax;
+		mov edi, 1;
+		shl edi, 3;
+		add edi, eax;
+		push edi;
+		push esi;
+		call swapHeapNodes;
+		add esp, 8;
+
+		dec heap_n;
+		mov edx, 1;
+
+		_heap_loop_2: // start loop
+		mov esi, edx;
+		shl esi, 1;
+		mov edi, esi;
+		or edi, 1; // esi - left, edi - right
+		
+		lea eax, heap;
+		cmp heap_n, esi;
+			jl _end_heap_loop_2;
+
+		mov ecx, 0 //flags!!
+
+		// verify left
+		mov ebx, [eax+edx*8+4];
+		cmp ebx, [eax+esi*8+4];
+			jle _dontgo_left;
+		or ecx, 1; // can go left
+		_dontgo_left:;
+
+		// verify right
+		cmp heap_n, edi;
+			jl _dontgo_right;
+		mov ebx, [eax+edx*8+4];
+		cmp ebx, [eax+edi*8+4];
+			jle _dontgo_right;
+		or ecx, 2; // can go right
+		_dontgo_right:;
+
+		// verify left<right
+		mov ebx, [eax+esi*8+4];
+		cmp ebx, [eax+edi*8+4];
+			jge _noleftright;
+		or ecx, 4; // left<right flag
+		_noleftright:
+
+		
+		// now verify all the flags
+		test ecx, 3;
+			jz _end_heap_loop_2;
+		mov ebx, ecx;
+		and ebx, 3;
+		cmp ebx, 3;
+			jne _only1_set;
+		// both bits are set, we take the minimum son
+		test ecx, 4;
+			jnz _goleft;
+		jmp _goright;
+
+		_only1_set:;
+		test ebx, 1;
+			jz _goright;
+		jmp _goleft;
+
+		_goleft:
+		push edx;
+		shl edx, 3;
+		add edx, eax;
+		push edx;
+		shl esi, 3;
+		add esi, eax;
+		push esi;
+		call swapHeapNodes;
+		add esp, 8;
+
+		pop edx;
+		shl edx, 1;
+		jmp _stopgos;
+		
+		_goright:
+		push edx;
+		shl edx, 3;
+		add edx, eax;
+		push edx;
+		shl edi, 3;
+		add edi, eax;
+		push edi;
+		call swapHeapNodes;
+		add esp, 8;
+
+		pop edx;
+		shl edx, 1;
+		or edx, 1;
+		
+		_stopgos:
+
+		jmp _heap_loop_2;
+		_end_heap_loop_2:;
+	};
+}
+
+
+ListaNod* graf[100'001];
+int distante[100'001];
+
+int main()
+{
+	__asm {
+		call readInt
+		push eax // [esp+4] = n
+		call readInt
+		push eax // [esp] = m
+		
+
+		mov ecx, [esp];
+		_start_loop_m:
+		test ecx, ecx;
+			je _end_loop_m;
+		push ecx;
+		
+		call readInt;
+		push eax;
+		call readInt;
+		push eax;
+		call readInt;
+		push eax;
+
+		mov eax, [esp];  // c
+		mov ebx, [esp+4];// b
+		mov edx, [esp+8];// a
+		
+		lea esi, graf;
+		mov edi, edx;
+		shl edi, 2;
+		add esi, edi;
+		
+		push eax; // c
+		push ebx; // b
+		push esi; // graf+a*4
+		call addInceputLista;
+		pop esi;
+		add esp, 8;
+		mov dword ptr [esi], eax;
+
+		//bidirectional graphs:
+		/*
+		mov eax, [esp];  // c
+		mov ebx, [esp+4];// b
+		mov edx, [esp+8];// a
+		
+		lea esi, graf;
+		mov edi, ebx;
+		shl edi, 2;
+		add esi, edi;
+		
+		push eax; // c
+		push edx; // a
+		push esi; // graf+b*4
+		call addInceputLista;
+		pop esi;
+		add esp, 8;
+		mov dword ptr [esi], eax;*/
+		
+		add esp, 12;
+		pop ecx;
+
+		dec ecx;
+		jmp _start_loop_m;
+
+		_end_loop_m:
+
+		add esp, 4; // nu ne mai trebuie m. acum avem n=[esp].
+
+
+		/// am bagat toate muchiile in liste. acum trebuie doar sa rulam dijkstra (ez!)
+
+		// bagam int-max la distante, si 0 in distante[1]
+		lea esi, distante;
+		mov dword ptr [esi+4], 0;
+		
+		mov ecx, 2;
+		_start_loop_1:
+		cmp ecx, [esp];
+			jg _end_loop_1;
+		mov dword ptr [esi+ecx*4], 2147483647;
+		inc ecx;
+		jmp _start_loop_1;
+		_end_loop_1:
+
+
+		// insert 1 in min-heap
+		push dword ptr 0;
+		push dword ptr 1;
+		call insertHeap;
+		add esp, 8;
+
+
+		// dijkstra
+		_start_loop_2:
+		cmp heap_n, 0;
+			je _end_loop_2;
+		
+		push dword ptr [heap+12];
+		push dword ptr [heap+8];
+		call popHeap;
+
+		mov ebx, [esp];  // ebx = nod
+		mov ecx, [esp+4];// ecx = distanta pana la nod
+
+		lea eax, distante;
+		cmp ecx, [eax+ebx*4];
+			jne _end_loop_3;
+
+		lea eax, graf;
+		mov edx, [eax+ebx*4];
+
+				_start_loop_3:
+				test edx, edx;
+					jz _end_loop_3;
+				mov esi, [edx]; // esi = next node
+				//[edx+4];// edge cost
+
+				lea eax, distante;
+				mov edi, ecx;
+				add edi, [edx+4];
+				cmp edi, [eax+esi*4];
+					jge _dont_update;
+
+				mov [eax+esi*4], edi;
+				push ecx;
+				push edx;
+				push edi;
+				push esi;
+				call insertHeap;
+				add esp, 8;
+				pop edx;
+				pop ecx;
+
+				_dont_update:
+				mov edx, dword ptr [edx+8]; // next node in list
+				jmp _start_loop_3;
+				_end_loop_3:
+		
+		add esp, 8;
+		jmp _start_loop_2;
+		_end_loop_2:
+
+
+		// print
+
+		mov ecx, 1;
+		_start_loop_4:
+		cmp ecx, [esp];
+			jg _end_loop_4;
+		push ecx;
+		lea eax, distante;
+		push dword ptr [eax+ecx*4];
+		call printInt;
+		add esp, 4;
+		pop ecx;
+		inc ecx;
+		jmp _start_loop_4;
+		_end_loop_4:
+
+
+		add esp, 4; // n-ul
+		mov eax, 69;
+	};
+}
